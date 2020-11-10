@@ -8,6 +8,7 @@ import com.linkedin.cruisecontrol.metricdef.MetricInfo;
 import com.linkedin.cruisecontrol.monitor.sampling.aggregator.AggregatedMetricValues;
 import com.linkedin.cruisecontrol.monitor.sampling.aggregator.MetricValues;
 import com.linkedin.kafka.cruisecontrol.common.Resource;
+import com.linkedin.kafka.cruisecontrol.config.constants.AnalyzerConfig;
 import com.linkedin.kafka.cruisecontrol.config.KafkaCruiseControlConfig;
 import com.linkedin.kafka.cruisecontrol.config.constants.MonitorConfig;
 import com.linkedin.kafka.cruisecontrol.monitor.metricdefinition.KafkaMetricDef;
@@ -44,13 +45,24 @@ public final class ModelUtils {
   private static final double ALLOWED_METRIC_ERROR_FACTOR = 1.05;
   private static final int UNSTABLE_METRIC_THROUGHPUT_THRESHOLD = 10;
   private static boolean useLinearRegressionModel = false;
+  private static boolean excludeHighReplicationFactorTopics = false;
 
   private ModelUtils() {
 
   }
 
+  /**
+   * Set values for useLinearRegressionModel and 
+   * for excludeHighReplicationFactorTopics (default false)
+   * @param config KafkaCruiseControlConfig
+   */
   public static void init(KafkaCruiseControlConfig config) {
     useLinearRegressionModel = config.getBoolean(MonitorConfig.USE_LINEAR_REGRESSION_MODEL_CONFIG);
+    excludeHighReplicationFactorTopics = config.getBoolean(AnalyzerConfig.EXCLUDE_HIGHREPLICATION_TOPICS_FROM_PARTITION_MOVEMEMENT_CONFIG);
+  }
+
+  public static Boolean excludeHighReplicationFactorTopics() {
+    return excludeHighReplicationFactorTopics;
   }
 
   /**
