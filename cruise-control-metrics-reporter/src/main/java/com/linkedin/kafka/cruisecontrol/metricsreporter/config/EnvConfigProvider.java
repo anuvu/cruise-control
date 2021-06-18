@@ -19,6 +19,12 @@ public class EnvConfigProvider implements ConfigProvider {
 
   private Map<String, String> _preConfiguredEnvironmentVariables;
 
+  private static Map<String, String> _systemVariables;
+
+  static {
+    _systemVariables = System.getenv();
+  }
+
   @Override
   public ConfigData get(String path) {
     assertNoPath(path);
@@ -45,6 +51,7 @@ public class EnvConfigProvider implements ConfigProvider {
     _preConfiguredEnvironmentVariables = configs.entrySet()
       .stream()
       .collect(Collectors.toMap(Entry::getKey, kv -> (String) kv.getValue()));
+    _preConfiguredEnvironmentVariables.putAll(_systemVariables);
   }
 
   private static void assertNoPath(String path) {
