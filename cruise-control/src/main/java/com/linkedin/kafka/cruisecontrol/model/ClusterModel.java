@@ -333,7 +333,7 @@ public class ClusterModel implements Serializable {
       Set<String> topicsWithHighReplicationFactor = _replicationFactorByTopic.entrySet().stream()
                                                                                 .filter(map -> map.getValue() > _aliveBrokers.size())
                                                                                 .map(map -> map.getKey()).collect(Collectors.toSet());
-      for (Replica r:  broker.currentOfflineReplicas()) {
+      for (Replica r: broker.currentOfflineReplicas()) {
         if (topicsWithHighReplicationFactor.contains(r.getJsonStructure().get("topic"))) {
           _selfHealingEligibleReplicas.remove(r);
         }
