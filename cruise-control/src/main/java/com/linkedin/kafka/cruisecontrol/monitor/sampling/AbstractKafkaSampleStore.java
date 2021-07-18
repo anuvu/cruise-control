@@ -31,7 +31,7 @@ import static com.linkedin.kafka.cruisecontrol.monitor.sampling.SamplingUtils.bo
 
 public abstract class AbstractKafkaSampleStore implements SampleStore {
   protected static final Duration PRODUCER_CLOSE_TIMEOUT = Duration.ofMinutes(3);
-  protected static final short DEFAULT_SAMPLE_STORE_TOPIC_REPLICATION_FACTOR = 2;
+  protected static final short DEFAULT_SAMPLE_STORE_TOPIC_REPLICATION_FACTOR = 3;
   protected static final int DEFAULT_PARTITION_SAMPLE_STORE_TOPIC_PARTITION_COUNT = 32;
 
   protected volatile boolean _shutdown = false;
