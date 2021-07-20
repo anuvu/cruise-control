@@ -26,6 +26,7 @@ import org.slf4j.Logger;
 import static com.linkedin.kafka.cruisecontrol.KafkaCruiseControlUtils.CLIENT_REQUEST_TIMEOUT_MS;
 import static com.linkedin.kafka.cruisecontrol.KafkaCruiseControlUtils.createTopic;
 import static com.linkedin.kafka.cruisecontrol.KafkaCruiseControlUtils.maybeUpdateTopicConfig;
+import static com.linkedin.kafka.cruisecontrol.KafkaCruiseControlUtils.maybeUpdateReplicationFactor;
 import static com.linkedin.kafka.cruisecontrol.KafkaCruiseControlUtils.maybeIncreasePartitionCount;
 import static com.linkedin.kafka.cruisecontrol.monitor.sampling.SamplingUtils.bootstrapServers;
 
@@ -33,6 +34,7 @@ public abstract class AbstractKafkaSampleStore implements SampleStore {
   protected static final Duration PRODUCER_CLOSE_TIMEOUT = Duration.ofMinutes(3);
   protected static final short DEFAULT_SAMPLE_STORE_TOPIC_REPLICATION_FACTOR = 3;
   protected static final int DEFAULT_PARTITION_SAMPLE_STORE_TOPIC_PARTITION_COUNT = 32;
+  public static final String SAMPLE_STORE_TOPIC_REPLICATION_FACTOR_CONFIG = "sample.store.topic.replication.factor";
 
   protected volatile boolean _shutdown = false;
   protected Short _sampleStoreTopicReplicationFactor;
@@ -63,6 +65,7 @@ public abstract class AbstractKafkaSampleStore implements SampleStore {
    * @return Desired replication factor of sample store topics, or {@code null} if failed to resolve replication factor.
    */
   protected short sampleStoreTopicReplicationFactor(Map<String, ?> config, AdminClient adminClient) {
+<<<<<<< HEAD
     if (_sampleStoreTopicReplicationFactor != null) {
       return _sampleStoreTopicReplicationFactor;
     }
@@ -89,6 +92,26 @@ public abstract class AbstractKafkaSampleStore implements SampleStore {
       numberOfBrokersInCluster.set(Math.min(DEFAULT_SAMPLE_STORE_TOPIC_REPLICATION_FACTOR, numberOfBrokersInCluster.get()));
       return false;
     }, maxRetryCount);
+=======
+    if (_sampleStoreTopicReplicationFactor == null) {
+      if (config.get(SAMPLE_STORE_TOPIC_REPLICATION_FACTOR_CONFIG) != null) {
+        _sampleStoreTopicReplicationFactor = Short.parseShort((String) config.get(SAMPLE_STORE_TOPIC_REPLICATION_FACTOR_CONFIG));
+      } else {
+        short numberOfBrokersInCluster;
+        try {
+          numberOfBrokersInCluster = (short) adminClient.describeCluster().nodes().get(CLIENT_REQUEST_TIMEOUT_MS,
+                                                                                      TimeUnit.MILLISECONDS).size();
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+          throw new IllegalStateException("Auto creation of sample store topics failed due to failure to describe cluster.", e);
+        }
+        if (numberOfBrokersInCluster <= 1) {
+          throw new IllegalStateException(String.format("Kafka cluster has less than 2 brokers (brokers in cluster=%d, zookeeper.connect=%s)",
+                                                        numberOfBrokersInCluster, config.get(ExecutorConfig.ZOOKEEPER_CONNECT_CONFIG)));
+        }
+        _sampleStoreTopicReplicationFactor = (short) Math.min(DEFAULT_SAMPLE_STORE_TOPIC_REPLICATION_FACTOR, numberOfBrokersInCluster);
+      }
+    }
+>>>>>>> sample store replication-fixes
 
     if (success) {
       return (short) numberOfBrokersInCluster.get();
@@ -101,6 +124,7 @@ public abstract class AbstractKafkaSampleStore implements SampleStore {
     if (!createTopic(adminClient, sampleStoreTopic)) {
       // Update topic config and partition count to ensure desired properties.
       maybeUpdateTopicConfig(adminClient, sampleStoreTopic);
+      maybeUpdateReplicationFactor(adminClient, sampleStoreTopic);
       maybeIncreasePartitionCount(adminClient, sampleStoreTopic);
     }
   }
