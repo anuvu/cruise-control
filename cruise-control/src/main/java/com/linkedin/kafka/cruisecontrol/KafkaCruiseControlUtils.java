@@ -17,16 +17,24 @@ import com.linkedin.kafka.cruisecontrol.metricsreporter.CruiseControlMetricsUtil
 import com.linkedin.kafka.cruisecontrol.metricsreporter.config.EnvConfigProvider;
 import com.linkedin.kafka.cruisecontrol.monitor.ModelCompletenessRequirements;
 import com.linkedin.kafka.cruisecontrol.monitor.task.LoadMonitorTaskRunner;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Random;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import kafka.zk.KafkaZkClient;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsResult;
+import org.apache.kafka.clients.admin.AlterPartitionReassignmentsResult;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.CreatePartitionsResult;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DescribeConfigsResult;
+import org.apache.kafka.clients.admin.NewPartitionReassignment;
 import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
@@ -65,18 +73,14 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.time.Duration;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.Properties;
-import java.util.Random;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import scala.Option;
 
@@ -305,6 +309,56 @@ public final class KafkaCruiseControlUtils {
       }
     }
 
+    return true;
+  }
+
+  /** 
+   * Alter the Replication Factor of a topic if needed
+   * @param adminClient The adminClient to send describeTopics and alterReplicationFactor requests to.
+   * @param topicToChangeReplicationFactor Existing topic whose RF is to be modified -- cannot be {@code null}.
+   * @return {@code true} if the request is completed successfully, {@code false} if there are any exceptions.
+  */
+  public static boolean maybeUpdateReplicationFactor(AdminClient adminClient, NewTopic topicToChangeReplicationFactor) {
+    short desiredReplicationFactor = topicToChangeReplicationFactor.replicationFactor();
+
+    String topicName = topicToChangeReplicationFactor.name();
+    LOG.info("Attempting alter of replication factor for topic {}", topicToChangeReplicationFactor.name());
+    // Retrieve ReplicationFactor of topic to check if it needs an update.
+    TopicDescription topicDescription;
+    try {
+      topicDescription = adminClient.describeTopics(Collections.singletonList(topicName)).values()
+                                    .get(topicName).get(CLIENT_REQUEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    } catch (InterruptedException | ExecutionException | TimeoutException e) {
+      LOG.warn("Modify RF for topic {} failed due to failure to describe cluster.", topicName, e);
+      return false;
+    }
+
+    // Alter Replication Factor of topic if needed.
+    try {
+      List<Node> brokers = new ArrayList<Node>(adminClient.describeCluster().nodes().get());
+      if ((short) topicDescription.partitions().get(0).replicas().size() != desiredReplicationFactor) {
+        if (brokers.size() < desiredReplicationFactor) {
+          LOG.warn("Unable to increase replication due to insufficient brokers- requested {} replicas but only {} brokers in cluster", 
+                    desiredReplicationFactor, brokers.size());
+          return false;
+        }
+        Map<TopicPartition, Optional<NewPartitionReassignment>> reassignements = new HashMap<>();
+        List<Integer> targetReplicasList = brokers.stream().limit(desiredReplicationFactor).map(Node::id).collect(Collectors.toList());
+        // add each partition to reassignments
+        // move replica onto 1st-n brokers
+        // will be balanced by CruiseControl later on
+        // TODO: make smarter move by not requiring all partitionReplicas to be moved
+        // i.e, incremental changes + increase/decrease RF separately
+        for (int i = 0; i < topicToChangeReplicationFactor.numPartitions(); i++) {
+          reassignements.put(new TopicPartition(topicName, i), Optional.of(new NewPartitionReassignment(targetReplicasList)));
+        }
+        AlterPartitionReassignmentsResult alterPartitionReassignmentsResult = adminClient.alterPartitionReassignments(reassignements);
+        alterPartitionReassignmentsResult.all();
+      }
+    } catch (ExecutionException | InterruptedException e) {
+      LOG.warn("Unable to change topic {} replication factor from {} to {}", 
+                topicName, topicDescription.partitions().get(0).replicas().size(), desiredReplicationFactor, e);
+    }
     return true;
   }
 
