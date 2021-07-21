@@ -17,7 +17,6 @@ import com.linkedin.kafka.cruisecontrol.metricsreporter.CruiseControlMetricsUtil
 import com.linkedin.kafka.cruisecontrol.metricsreporter.config.EnvConfigProvider;
 import com.linkedin.kafka.cruisecontrol.monitor.ModelCompletenessRequirements;
 import com.linkedin.kafka.cruisecontrol.monitor.task.LoadMonitorTaskRunner;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Random;
 import java.util.concurrent.ExecutionException;
@@ -47,6 +46,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
@@ -322,7 +322,6 @@ public final class KafkaCruiseControlUtils {
     short desiredReplicationFactor = topicToChangeReplicationFactor.replicationFactor();
 
     String topicName = topicToChangeReplicationFactor.name();
-    LOG.info("Attempting alter of replication factor for topic {}", topicToChangeReplicationFactor.name());
     // Retrieve ReplicationFactor of topic to check if it needs an update.
     TopicDescription topicDescription;
     try {
@@ -332,32 +331,59 @@ public final class KafkaCruiseControlUtils {
       LOG.warn("Modify RF for topic {} failed due to failure to describe cluster.", topicName, e);
       return false;
     }
+    short currentReplicationFactor = (short) topicDescription.partitions().get(0).replicas().size();
 
     // Alter Replication Factor of topic if needed.
     try {
-      List<Node> brokers = new ArrayList<Node>(adminClient.describeCluster().nodes().get());
-      if ((short) topicDescription.partitions().get(0).replicas().size() != desiredReplicationFactor) {
+      List<Integer> brokers = adminClient.describeCluster().nodes().get().stream().map(Node::id).collect(Collectors.toList());
+      if (currentReplicationFactor != desiredReplicationFactor) {
+        LOG.info("Attempting alter of replication factor for topic {}", topicToChangeReplicationFactor.name());
         if (brokers.size() < desiredReplicationFactor) {
           LOG.warn("Unable to increase replication due to insufficient brokers- requested {} replicas but only {} brokers in cluster", 
                     desiredReplicationFactor, brokers.size());
           return false;
         }
         Map<TopicPartition, Optional<NewPartitionReassignment>> reassignements = new HashMap<>();
-        List<Integer> targetReplicasList = brokers.stream().limit(desiredReplicationFactor).map(Node::id).collect(Collectors.toList());
+        // List<Integer> targetReplicasList = brokers.stream().limit(desiredReplicationFactor).map(Node::id).collect(Collectors.toList());
         // add each partition to reassignments
         // move replica onto 1st-n brokers
         // will be balanced by CruiseControl later on
         // TODO: make smarter move by not requiring all partitionReplicas to be moved
         // i.e, incremental changes + increase/decrease RF separately
-        for (int i = 0; i < topicToChangeReplicationFactor.numPartitions(); i++) {
-          reassignements.put(new TopicPartition(topicName, i), Optional.of(new NewPartitionReassignment(targetReplicasList)));
+        if (desiredReplicationFactor > currentReplicationFactor) {
+          LOG.info("Topic {}'s desired RF is higher than current RF-{}, increasing to {} ", topicToChangeReplicationFactor.name(), 
+                    currentReplicationFactor, desiredReplicationFactor);                          
+          for (TopicPartitionInfo topicPartition: topicDescription.partitions()) {
+            // first, get list of all brokers that has replica of the partition
+            List<Integer> partitionReplicaIDs = topicPartition.replicas().stream().map(Node::id).collect(Collectors.toList());
+            // then, add brokers that dont have replica until desired size is reached
+            for (int broker: brokers) {
+              if (!partitionReplicaIDs.contains(broker)) {
+                partitionReplicaIDs.add(broker);
+                if (partitionReplicaIDs.size() == desiredReplicationFactor) {
+                  // reached desiredReplicationFactor, can stop iterating over brokers
+                  break;
+                }
+              }
+            }
+            reassignements.put(new TopicPartition(topicName, topicPartition.partition()), 
+                                Optional.of(new NewPartitionReassignment(partitionReplicaIDs)));
+          }
+        } else if (desiredReplicationFactor < currentReplicationFactor) {
+          LOG.info("Topic {}'s desired RF is lower than current RF-{}, decreasing to {} ", topicToChangeReplicationFactor.name(), 
+                    currentReplicationFactor, desiredReplicationFactor);
+          for (TopicPartitionInfo topicPartition: topicDescription.partitions()) {
+            reassignements.put(new TopicPartition(topicName, topicPartition.partition()), 
+                                Optional.of(new NewPartitionReassignment(
+                                  topicPartition.replicas().stream().limit(desiredReplicationFactor).map(Node::id).collect(Collectors.toList()))));
+          }
         }
         AlterPartitionReassignmentsResult alterPartitionReassignmentsResult = adminClient.alterPartitionReassignments(reassignements);
         alterPartitionReassignmentsResult.all();
       }
     } catch (ExecutionException | InterruptedException e) {
       LOG.warn("Unable to change topic {} replication factor from {} to {}", 
-                topicName, topicDescription.partitions().get(0).replicas().size(), desiredReplicationFactor, e);
+                topicName, currentReplicationFactor, desiredReplicationFactor, e);
     }
     return true;
   }
