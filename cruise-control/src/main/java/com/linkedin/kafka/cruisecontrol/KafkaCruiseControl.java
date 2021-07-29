@@ -273,9 +273,21 @@ public class KafkaCruiseControl {
         throw new IllegalStateException("Cannot execute new proposals due to failure to retrieve whether the Kafka cluster has "
                                         + "an already ongoing partition reassignment.", e);
       }
+      // can ignore in-flight reassignments- they should have either finished
+      // or be in a badly stuck state where a revert to original is not possible
+      // eg. [1,2,3]->[1,2,4] but 3, 4 went offline at same time
+      // then, it cant proceed or revert. In this case, we expect that if a new broker 
+      // 5 joins the cluster, the new movement will be to [1,2]->[1,2,5]
+      // basically, adding the --additional like from command line-  link broken due to line length limit
+      // https://github.com/apache/kafka/blob/52f87e2c65220a76f9c21d7da28004bf074d02b3/
+      // core/src/main/scala/kafka/admin/ReassignPartitionsCommand.scala#L756
       if (!partitionsBeingReassigned.isEmpty()) {
-        throw new IllegalStateException(String.format("Cannot execute new proposals while there are ongoing partition reassignments "
-                                                      + "initiated by external agent: %s", partitionsBeingReassigned));
+        if (_config.getBoolean(ExecutorConfig.MULTIPLE_PARTITION_ASSIGNMENTS_ENABLED)) {
+          LOG.warn("Partition Reassignments {} in flight, adding additional due to anomaly detection", partitionsBeingReassigned);
+        } else {
+          throw new IllegalStateException(String.format("Cannot execute new proposals while there are ongoing partition reassignments "
+                                                        + "initiated by external agent: %s", partitionsBeingReassigned));
+        }
       } else if (_executor.hasOngoingLeaderElection()) {
         throw new IllegalStateException("Cannot execute new proposals while there are ongoing leadership reassignments initiated by "
                                         + "external agent.");

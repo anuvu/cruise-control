@@ -440,6 +440,15 @@ public class ExecutorConfig {
       + " Relevant only if concurrency adjuster is enabled based on (At/Under)MinISR status of partitions.";
 
   /**
+   * <code>multiple.partition.assignments.enabled</code>
+   */
+  public static final String MULTIPLE_PARTITION_ASSIGNMENTS_ENABLED = "multiple.partition.assignments.enabled";
+  public static final boolean DEFAULT_MULTIPLE_PARTITION_ASSIGNMENTS_ENABLED = false;
+  public static final String MULTIPLE_PARTITION_ASSIGNMENTS_ENABLED_DOC = "The flag to indicate whether multiple "
+      + "partition assignment are allowed or not. Used in case of partitionReassigment in a limbo state due to "
+      + "the destination broker being unavailable and one of the original brokers to revert to is also down";
+
+  /**
    * Define configs for Executor.
    *
    * @param configDef Config definition.
@@ -698,6 +707,11 @@ public class ExecutorConfig {
                             DEFAULT_CONCURRENCY_ADJUSTER_MIN_ISR_RETENTION_MS,
                             atLeast(1),
                             ConfigDef.Importance.LOW,
-                            CONCURRENCY_ADJUSTER_MIN_ISR_RETENTION_MS_DOC);
+                            CONCURRENCY_ADJUSTER_MIN_ISR_RETENTION_MS_DOC)
+                    .define(MULTIPLE_PARTITION_ASSIGNMENTS_ENABLED,
+                            ConfigDef.Type.BOOLEAN,
+                            DEFAULT_MULTIPLE_PARTITION_ASSIGNMENTS_ENABLED,
+                            ConfigDef.Importance.HIGH,
+                            MULTIPLE_PARTITION_ASSIGNMENTS_ENABLED_DOC);
   }
 }

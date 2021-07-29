@@ -1728,7 +1728,7 @@ public class Executor {
         Set<TopicPartition> dead = new HashSet<>();
         Set<TopicPartition> noReassignmentToCancel = new HashSet<>();
         ExecutionUtils.processAlterPartitionReassignmentsResult(result, deleted, dead, noReassignmentToCancel);
-        LOG.debug("Handling dead inter-broker replica tasks {} (deleted: {} dead: {} noReassignmentToCancel: {})",
+        LOG.info("Handling dead inter-broker replica tasks {} (deleted: {} dead: {} noReassignmentToCancel: {})",
                   tasksToCancel, deleted, dead, noReassignmentToCancel);
 
         if (_stopSignal.get() == NO_STOP_EXECUTION) {
