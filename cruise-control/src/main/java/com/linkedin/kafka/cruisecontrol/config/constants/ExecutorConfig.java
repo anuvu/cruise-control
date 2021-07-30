@@ -543,6 +543,13 @@ public final class ExecutorConfig {
       + " Set to false to keep the external agent reassignment and skip starting the execution.";
   private ExecutorConfig() {
   }
+   * <code>remove.stuck.partition.reassignments</code>
+   */
+  public static final String REMOVE_STUCK_PARTITIONS_REASSIGNMENTS = "remove.stuck.partition.reassignments";
+  public static final boolean DEFAULT_REMOVE_STUCK_PARTITIONS_REASSIGNMENTS = false;
+  public static final String REMOVE_STUCK_PARTITIONS_REASSIGNMENTS_DOC = "Remove stuck partitions from ongoing reassignment."
+      + " Required because there can be cases where the rassignment gets into a limbo state during reassignment where it cannot"
+      + " finish the reassignemnt or revert back to original (Eg. dest & origin brokers both went down)";
 
   /**
    * Define configs for Executor.
@@ -881,5 +888,10 @@ public final class ExecutorConfig {
                             DEFAULT_AUTO_STOP_EXTERNAL_AGENT,
                             ConfigDef.Importance.MEDIUM,
                             AUTO_STOP_EXTERNAL_AGENT_DOC);
+                    .define(REMOVE_STUCK_PARTITIONS_REASSIGNMENTS,
+                            ConfigDef.Type.BOOLEAN,
+                            DEFAULT_REMOVE_STUCK_PARTITIONS_REASSIGNMENTS,
+                            ConfigDef.Importance.HIGH,
+                            REMOVE_STUCK_PARTITIONS_REASSIGNMENTS_DOC);
   }
 }

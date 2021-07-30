@@ -299,6 +299,16 @@ public class KafkaCruiseControl {
           throw new IllegalStateException(String.format("Cannot execute new proposals while there are ongoing partition reassignments "
                                                         + "initiated by external agent: %s", partitionsBeingReassigned));
         }
+        if (_config.getBoolean(ExecutorConfig.REMOVE_STUCK_PARTITIONS_REASSIGNMENTS)) {
+          LOG.info("Trying to resolve stuck partitions {}", partitionsBeingReassigned);
+          _executor.fixStuckPartitionReassignments();
+        } else {
+          throw new IllegalStateException(String.format("Cannot execute new proposals while there are ongoing partition reassignments "
+                                                      + "initiated by external agent: %s", partitionsBeingReassigned));
+        }
+      } else if (_executor.hasOngoingLeaderElection()) {
+        throw new IllegalStateException("Cannot execute new proposals while there are ongoing leadership reassignments initiated by "
+                                        + "external agent.");
       }
     }
   }
