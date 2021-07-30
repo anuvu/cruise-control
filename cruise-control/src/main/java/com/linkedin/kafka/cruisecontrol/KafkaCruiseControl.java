@@ -295,11 +295,14 @@ public class KafkaCruiseControl {
             LOG.info("External agent is reassigning partitions. "
                      + "The request to stop it is submitted successfully: {}", partitionsBeingReassigned);
           }
+        } else if (_config.getBoolean(ExecutorConfig.REMOVE_STUCK_PARTITIONS_REASSIGNMENTS)) {
+          LOG.info("Trying to resolve stuck partitions {}", partitionsBeingReassigned);
+          _executor.fixStuckPartitionReassignments();
         } else {
           throw new IllegalStateException(String.format("Cannot execute new proposals while there are ongoing partition reassignments "
-                                                        + "initiated by external agent: %s", partitionsBeingReassigned));
+                                                      + "initiated by external agent: %s", partitionsBeingReassigned));
         }
-      }
+      } 
     }
   }
 
