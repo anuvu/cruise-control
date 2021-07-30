@@ -440,6 +440,15 @@ public class ExecutorConfig {
       + " Relevant only if concurrency adjuster is enabled based on (At/Under)MinISR status of partitions.";
 
   /**
+   * <code>remove.stuck.partition.reassignments</code>
+   */
+  public static final String REMOVE_STUCK_PARTITIONS_REASSIGNMENTS = "remove.stuck.partition.reassignments";
+  public static final boolean DEFAULT_REMOVE_STUCK_PARTITIONS_REASSIGNMENTS = false;
+  public static final String REMOVE_STUCK_PARTITIONS_REASSIGNMENTS_DOC = "Remove stuck partitions from ongoing reassignment."
+      + " Required because there can be cases where the rassignment gets into a limbo state during reassignment where it cannot"
+      + " finish the reassignemnt or revert back to original (Eg. dest & origin brokers both went down)";
+
+  /**
    * Define configs for Executor.
    *
    * @param configDef Config definition.
@@ -698,6 +707,11 @@ public class ExecutorConfig {
                             DEFAULT_CONCURRENCY_ADJUSTER_MIN_ISR_RETENTION_MS,
                             atLeast(1),
                             ConfigDef.Importance.LOW,
-                            CONCURRENCY_ADJUSTER_MIN_ISR_RETENTION_MS_DOC);
+                            CONCURRENCY_ADJUSTER_MIN_ISR_RETENTION_MS_DOC)
+                    .define(REMOVE_STUCK_PARTITIONS_REASSIGNMENTS,
+                            ConfigDef.Type.BOOLEAN,
+                            DEFAULT_REMOVE_STUCK_PARTITIONS_REASSIGNMENTS,
+                            ConfigDef.Importance.HIGH,
+                            REMOVE_STUCK_PARTITIONS_REASSIGNMENTS_DOC);
   }
 }
