@@ -1074,6 +1074,8 @@ public class Executor {
     }
     // Note that in case there is an ongoing partition reassignment, we do not unpause metric sampling.
     if (hasOngoingPartitionReassignments) {
+      // check for stuck partition movements
+      fixStuckPartitionReassignments();
       throw new OngoingExecutionException("There are ongoing inter-broker partition movements: " + ongoingPartitionReassignments);
     } else {
       boolean hasOngoingIntraBrokerReplicaMovement;
