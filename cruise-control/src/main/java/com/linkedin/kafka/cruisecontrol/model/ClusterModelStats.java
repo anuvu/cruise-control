@@ -40,6 +40,7 @@ public class ClusterModelStats {
   private int _numBrokers;
   private int _numReplicasInCluster;
   private int _numPartitionsWithOfflineReplicas;
+  private int _numPartitionsWithLaggingReplicas;
   private int _numTopics;
   private final Map<Resource, Integer> _numBalancedBrokersByResource;
   private int _numBrokersUnderPotentialNwOut;
@@ -65,6 +66,7 @@ public class ClusterModelStats {
     _numBrokers = 0;
     _numReplicasInCluster = 0;
     _numPartitionsWithOfflineReplicas = 0;
+    _numPartitionsWithLaggingReplicas = 0;
     _numTopics = 0;
     _numBrokersUnderPotentialNwOut = 0;
     _numBalancedBrokersByResource = new HashMap<>();
@@ -98,7 +100,12 @@ public class ClusterModelStats {
     _numSnapshotWindows = clusterModel.load().numWindows();
     _monitoredPartitionsRatio = clusterModel.monitoredPartitionsRatio();
     populateStatsForDisks(balancingConstraint, aliveBrokers);
+    populateLaggingPartitionReplicasCount(clusterModel);
     return this;
+  }
+
+  private void populateLaggingPartitionReplicasCount(ClusterModel clusterModel) {
+    _numPartitionsWithLaggingReplicas = clusterModel.getPartitionsWithLaggingReplicas().size();
   }
 
   /**
@@ -106,6 +113,13 @@ public class ClusterModelStats {
    */
   public Map<Statistic, Map<Resource, Double>> resourceUtilizationStats() {
     return Collections.unmodifiableMap(_resourceUtilizationStats);
+  }
+
+  /**
+   * @return The number of partitions with lagging replicas(i.e, not in ISR set)
+   */
+  public int numPartitionsWithLaggingReplicas() {
+    return _numPartitionsWithLaggingReplicas;
   }
 
   /**
@@ -380,6 +394,7 @@ public class ClusterModelStats {
       partitionsWithOfflineReplicas.add(replica.topicPartition());
     }
     _numPartitionsWithOfflineReplicas = partitionsWithOfflineReplicas.size();
+    
   }
 
   /**

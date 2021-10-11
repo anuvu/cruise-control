@@ -156,4 +156,22 @@ public class SortedReplicasTest {
     }
     return broker;
   }
+
+  /**
+   * Generate brokers for use in other tests
+   * @param nodeid Broker id
+   * @param numReplicas # of replicas on broker
+   * @return new {@link com.linkedin.kafka.cruisecontrol.model.Broker}
+   */
+  public static Broker generateBroker(int nodeid, int numReplicas) {
+    Rack rack = new Rack("rack");
+    Host host = new Host("host", rack);
+    Broker broker = new Broker(host, nodeid, new BrokerCapacityInfo(TestConstants.BROKER_CAPACITY), false);
+
+    for (int i = 0; i < numReplicas; i++) {
+      Replica r = new Replica(new TopicPartition(TOPIC0, i), broker, i % 3 == 0);
+      broker.addReplica(r);
+    }
+    return broker;
+  }
 }
