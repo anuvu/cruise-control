@@ -75,6 +75,11 @@ public class ClusterModel implements Serializable {
   private final Map<Integer, Load> _potentialLeadershipLoadByBrokerId;
   private int _unknownHostId;
   private final Map<Integer, String> _capacityEstimationInfoByBrokerId;
+  private final Cluster _cluster;
+
+  public ClusterModel(ModelGeneration generation, double monitoredPartitionsRatio) {
+    this(generation, monitoredPartitionsRatio, null);
+  }
 
   /**
    * Constructor for the cluster class. It creates data structures to hold a list of racks, a map for partitions by
@@ -83,7 +88,7 @@ public class ClusterModel implements Serializable {
    * @param generation Model generation of the cluster
    * @param monitoredPartitionsRatio Monitored partitions ratio
    */
-  public ClusterModel(ModelGeneration generation, double monitoredPartitionsRatio) {
+  public ClusterModel(ModelGeneration generation, double monitoredPartitionsRatio, Cluster cluster) {
     _generation = generation;
     _racksById = new HashMap<>();
     _brokerIdToRack = new HashMap<>();
@@ -111,6 +116,21 @@ public class ClusterModel implements Serializable {
     _monitoredPartitionsRatio = monitoredPartitionsRatio;
     _unknownHostId = 0;
     _capacityEstimationInfoByBrokerId = new HashMap<>();
+    _cluster = cluster;
+  }
+
+  /**
+   * @return The partitions which have lagging replicas without any offline partitions. 
+   * This would imply that the ReplicaFetcher is either unable to catch up or has stopped fetching for some reason.
+   */
+  public List<PartitionInfo> getPartitionsWithLaggingReplicas() {
+    if (_cluster == null) {
+      return new ArrayList<PartitionInfo>();
+    }
+    return _cluster.topics().stream().filter(topic -> !topic.startsWith("__"))
+            .map(topic -> _cluster.partitionsForTopic(topic)).flatMap(List::stream)
+            .filter(partition -> (partition.replicas().length != partition.inSyncReplicas().length && partition.offlineReplicas().length == 0))
+            .collect(Collectors.toList());
   }
 
   /**
@@ -853,7 +873,7 @@ public class ClusterModel implements Serializable {
         }
       }
       replica = new Replica(tp, broker, isLeader, isOffline, disk);
-    } else {
+    } else { 
       replica = new Replica(tp, GENESIS_BROKER, false);
       replica.setBroker(broker);
     }

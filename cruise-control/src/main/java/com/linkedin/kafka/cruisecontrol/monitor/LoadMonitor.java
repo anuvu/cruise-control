@@ -512,6 +512,9 @@ public class LoadMonitor {
     long currentLoadGeneration = partitionMetricSampleAggregationResult.generation();
     ModelGeneration modelGeneration = new ModelGeneration(clusterAndGeneration.generation(), currentLoadGeneration);
     ClusterModel clusterModel = new ClusterModel(modelGeneration, partitionMetricSampleAggregationResult.validEntityRatioOfCompleteness());
+    
+    // ClusterModel clusterModel = new ClusterModel(modelGeneration, partitionMetricSampleAggregationResult.completeness().validEntityRatio(), 
+    // cluster);
 
     final Timer.Context ctx = _clusterModelCreationTimer.time();
     try {
