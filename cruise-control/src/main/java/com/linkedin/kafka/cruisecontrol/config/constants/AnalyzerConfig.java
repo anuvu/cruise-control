@@ -230,6 +230,14 @@ public class AnalyzerConfig {
       + "optimization proposal candidates. The more threads are used, the more memory and CPU resource will be used.";
 
   /**
+   * <code>num.proposal.precompute.threads</code>
+   */
+  public static final String MAX_LAGGING_REPLICA_REASSIGN_MS = "lagging.replica.reassign.ms";
+  public static final long DEFAULT_MAX_LAGGING_REPLICA_REASSIGN_MS = 30 * 60 * 1000L;
+  public static final String DEFAULT_MAX_LAGGING_REPLICA_REASSIGN_DOC = "How long to wait before manually reassigning "
+      + "lagging partitions. Defaults to 30 minutes";
+
+  /**
    * <code>optimization.options.generator.class</code>
    */
   public static final String OPTIMIZATION_OPTIONS_GENERATOR_CLASS_CONFIG = "optimization.options.generator.class";
@@ -636,6 +644,11 @@ public class AnalyzerConfig {
                             DEFAULT_FAST_MODE_PER_BROKER_MOVE_TIMEOUT_MS,
                             atLeast(1),
                             ConfigDef.Importance.LOW,
-                            FAST_MODE_PER_BROKER_MOVE_TIMEOUT_MS_DOC);
+                            FAST_MODE_PER_BROKER_MOVE_TIMEOUT_MS_DOC)
+                    .define(MAX_LAGGING_REPLICA_REASSIGN_MS,
+                            ConfigDef.Type.LONG,
+                            DEFAULT_MAX_LAGGING_REPLICA_REASSIGN_MS,
+                            ConfigDef.Importance.LOW,
+                            DEFAULT_MAX_LAGGING_REPLICA_REASSIGN_DOC);
   }
 }
