@@ -260,6 +260,8 @@ project(':cruise-control') {
     testCompile project(path: ':cruise-control-core', configuration: 'testOutput')
     testCompile "org.scala-lang:scala-library:2.12.10"
     testCompile 'org.easymock:easymock:4.3'
+    testCompile 'org.powermock:powermock-module-junit4:2.0.9'
+    testCompile 'org.powermock:powermock-api-easymock:2.0.9'
     testCompile "org.apache.kafka:kafka_2.12:$kafkaVersion:test"
     testCompile "org.apache.kafka:kafka-clients:$kafkaVersion:test"
     testCompile 'commons-io:commons-io:2.10.0'
