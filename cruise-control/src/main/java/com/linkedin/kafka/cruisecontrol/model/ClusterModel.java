@@ -76,7 +76,6 @@ public class ClusterModel implements Serializable {
   private int _unknownHostId;
   private final Map<Integer, String> _capacityEstimationInfoByBrokerId;
   private final Cluster _cluster;
-  private final HashMap<PartitionInfoWrapper, Long> _laggingPartitionsMap;
 
   public ClusterModel(ModelGeneration generation, double monitoredPartitionsRatio) {
     this(generation, monitoredPartitionsRatio, null);
@@ -117,25 +116,7 @@ public class ClusterModel implements Serializable {
     _monitoredPartitionsRatio = monitoredPartitionsRatio;
     _unknownHostId = 0;
     _capacityEstimationInfoByBrokerId = new HashMap<>();
-    _laggingPartitionsMap = new HashMap<>();
     _cluster = cluster;
-  }
-
-  /**
-   * set current LaggingPartitionsMap
-   * @param laggingPartitionsMap lagging partitions map
-   */
-  public void setLaggingPartitionsMap(HashMap<PartitionInfoWrapper, Long> laggingPartitionsMap) {
-    this._laggingPartitionsMap.clear();
-    this._laggingPartitionsMap.putAll(laggingPartitionsMap);
-  }
-
-  /**
-   * get current LaggingPartititonsMap
-   * @return laggingPartitionsMap
-   */
-  public HashMap<PartitionInfoWrapper, Long> getLaggingPartitionsMap() {
-    return this._laggingPartitionsMap;
   }
 
   /**
