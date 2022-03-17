@@ -6,6 +6,7 @@ package com.linkedin.kafka.cruisecontrol.analyzer.goals;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -15,11 +16,11 @@ import java.util.stream.Collectors;
 import com.linkedin.kafka.cruisecontrol.KafkaCruiseControlUtils;
 import com.linkedin.kafka.cruisecontrol.analyzer.OptimizationOptions;
 import com.linkedin.kafka.cruisecontrol.analyzer.goals.Goal.ClusterModelStatsComparator;
-import com.linkedin.kafka.cruisecontrol.analyzer.goals.LaggingReplicaReassignmentGoal.PartitionInfoWrapper;
 import com.linkedin.kafka.cruisecontrol.exception.OptimizationFailureException;
 import com.linkedin.kafka.cruisecontrol.model.Broker;
 import com.linkedin.kafka.cruisecontrol.model.ClusterModel;
 import com.linkedin.kafka.cruisecontrol.model.ClusterModelStats;
+import com.linkedin.kafka.cruisecontrol.model.PartitionInfoWrapper;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AlterPartitionReassignmentsResult;
 import org.apache.kafka.common.KafkaFuture;
@@ -87,37 +88,48 @@ public class LaggingReplicaReassignmentGoalTest {
         PartitionInfo partitionInfo2Copy = new PartitionInfo("topic2", 0, node1, replicas, isr);
         List<PartitionInfo> partitionsWithLaggingReplicas1 = new ArrayList<PartitionInfo>();
         partitionsWithLaggingReplicas1.add(partitionInfo1);
+        HashMap<PartitionInfoWrapper, Long> partitionsWithLaggingReplicasMap1 = new HashMap<PartitionInfoWrapper, Long>();
+        partitionsWithLaggingReplicasMap1.put(new PartitionInfoWrapper(partitionInfo1), System.currentTimeMillis());
         List<PartitionInfo> partitionsWithLaggingReplicas2 = new ArrayList<PartitionInfo>();
         partitionsWithLaggingReplicas2.add(partitionInfo2);
+        HashMap<PartitionInfoWrapper, Long> partitionsWithLaggingReplicasMap2 = new HashMap<PartitionInfoWrapper, Long>();
+        partitionsWithLaggingReplicasMap2.put(new PartitionInfoWrapper(partitionInfo2), System.currentTimeMillis());
         List<PartitionInfo> partitionsWithLaggingReplicas12 = new ArrayList<PartitionInfo>(partitionsWithLaggingReplicas1);
         partitionsWithLaggingReplicas12.add(partitionInfo2);
+        HashMap<PartitionInfoWrapper, Long> partitionsWithLaggingReplicasMap12 = new HashMap<PartitionInfoWrapper, Long>();
+        partitionsWithLaggingReplicasMap12.put(new PartitionInfoWrapper(partitionInfo1), System.currentTimeMillis() - 1000);
+        partitionsWithLaggingReplicasMap12.put(new PartitionInfoWrapper(partitionInfo2), System.currentTimeMillis());
         // send 1 partition w/ lagging replica
         EasyMock.expect(clusterModelStats.numPartitionsWithLaggingReplicas()).andReturn(1).times(6);
         EasyMock.expect(clusterModel.getClusterStats(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(clusterModelStats).anyTimes();
         EasyMock.expect(clusterModelStatsComparator.compare(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(0);
-
+        clusterModel.clearSortedReplicas();
         EasyMock.expectLastCall().andAnswer(() -> {
             return null;
         }).anyTimes();
-        clusterModel.clearSortedReplicas();
-        clusterModel.clearSortedReplicas();
-        EasyMock.expect(clusterModel.getPartitionsWithLaggingReplicas()).andReturn(new ArrayList<PartitionInfo>());
-        EasyMock.expect(clusterModel.getPartitionsWithLaggingReplicas()).andReturn(partitionsWithLaggingReplicas1);
-        EasyMock.expect(clusterModel.getPartitionsWithLaggingReplicas()).andReturn(partitionsWithLaggingReplicas12);
-        EasyMock.expect(clusterModel.getPartitionsWithLaggingReplicas()).andReturn(partitionsWithLaggingReplicas2);
+        clusterModel.setLaggingPartitionsMap(EasyMock.anyObject());
+        EasyMock.expectLastCall().andAnswer(() -> {
+            return null;
+        }).anyTimes();
+        
+        // clusterModel.clearSortedReplicas();
         EasyMock.expect(clusterModel.brokenBrokers()).andReturn(new TreeSet<Broker>()).anyTimes();
         EasyMock.expect(clusterModel.brokers()).andReturn(new TreeSet<Broker>(Arrays.asList(replicas).stream()
                         .map(node -> generateBroker(node.id(), 0)).collect(Collectors.toList()))).anyTimes();
         EasyMock.expect(clusterModel.aliveBrokers()).andReturn(new TreeSet<Broker>()).anyTimes();
         EasyMock.expect(adminClient.alterPartitionReassignments(EasyMock.anyObject())).andReturn(aprResult);
+        EasyMock.expect(clusterModel.getLaggingPartitionsMap()).andReturn(new HashMap<PartitionInfoWrapper, Long>());
+        EasyMock.expect(clusterModel.getPartitionsWithLaggingReplicas()).andReturn(new ArrayList<PartitionInfo>());
+        EasyMock.expect(clusterModel.getLaggingPartitionsMap()).andReturn(partitionsWithLaggingReplicasMap1);
+        EasyMock.expect(clusterModel.getPartitionsWithLaggingReplicas()).andReturn(partitionsWithLaggingReplicas1);
+        EasyMock.expect(clusterModel.getLaggingPartitionsMap()).andReturn(partitionsWithLaggingReplicasMap12);
+        EasyMock.expect(clusterModel.getPartitionsWithLaggingReplicas()).andReturn(partitionsWithLaggingReplicas12);
+        EasyMock.expect(clusterModel.getLaggingPartitionsMap()).andReturn(partitionsWithLaggingReplicasMap2);
+        EasyMock.expect(clusterModel.getPartitionsWithLaggingReplicas()).andReturn(partitionsWithLaggingReplicas2);
+        
         EasyMock.replay(clusterModel, clusterModelStats, clusterModelStatsComparator, adminClient, aprResult);
         // optimize once before sleep 
         goal.optimize(clusterModel, optimizedGoals, new OptimizationOptions(new HashSet<String>(), new HashSet<Integer>(), new HashSet<Integer>()));
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
         // optimize again after sleep
         goal.optimize(clusterModel, optimizedGoals, new OptimizationOptions(new HashSet<String>(), new HashSet<Integer>(), new HashSet<Integer>()));
         // should have been moved as 1st seen before sleep
@@ -165,20 +177,32 @@ public class LaggingReplicaReassignmentGoalTest {
         List<PartitionInfo> partitionsWithLaggingReplicas12 = new ArrayList<PartitionInfo>();
         partitionsWithLaggingReplicas12.add(partitionInfo1);
         partitionsWithLaggingReplicas12.add(partitionInfo2);
+        HashMap<PartitionInfoWrapper, Long> partitionsWithLaggingReplicasMap12 = new HashMap<PartitionInfoWrapper, Long>();
+        partitionsWithLaggingReplicasMap12.put(new PartitionInfoWrapper(partitionInfo1), System.currentTimeMillis());
+        partitionsWithLaggingReplicasMap12.put(new PartitionInfoWrapper(partitionInfo2), System.currentTimeMillis());
+        HashMap<PartitionInfoWrapper, Long> partitionsWithLaggingReplicasMap122 = new HashMap<PartitionInfoWrapper, Long>();
+        partitionsWithLaggingReplicasMap122.put(new PartitionInfoWrapper(partitionInfo1), System.currentTimeMillis() + 2000);
+        partitionsWithLaggingReplicasMap122.put(new PartitionInfoWrapper(partitionInfo2), System.currentTimeMillis() + 2000);
         // send 1 partition w/ lagging replica
         EasyMock.expect(clusterModelStats.numPartitionsWithLaggingReplicas()).andReturn(1).times(9);
         EasyMock.expect(clusterModel.getClusterStats(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(clusterModelStats).anyTimes();
         EasyMock.expect(clusterModelStatsComparator.compare(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(0);
 
+        clusterModel.clearSortedReplicas();
         EasyMock.expectLastCall().andAnswer(() -> {
             return null;
         }).anyTimes();
-        clusterModel.clearSortedReplicas();
-        clusterModel.clearSortedReplicas();
-        clusterModel.clearSortedReplicas();
+        clusterModel.setLaggingPartitionsMap(EasyMock.anyObject());
+        EasyMock.expectLastCall().andAnswer(() -> {
+            return null;
+        }).anyTimes();
+        
         EasyMock.expect(clusterModel.getPartitionsWithLaggingReplicas()).andReturn(partitionsWithLaggingReplicas12).times(2);
+        EasyMock.expect(clusterModel.getLaggingPartitionsMap()).andReturn(partitionsWithLaggingReplicasMap12).times(2);
         EasyMock.expect(clusterModel.getPartitionsWithLaggingReplicas()).andReturn(new ArrayList<PartitionInfo>()).times(2);
+        EasyMock.expect(clusterModel.getLaggingPartitionsMap()).andReturn(new HashMap<PartitionInfoWrapper, Long>()).times(2);
         EasyMock.expect(clusterModel.getPartitionsWithLaggingReplicas()).andReturn(partitionsWithLaggingReplicas12).times(2);
+        EasyMock.expect(clusterModel.getLaggingPartitionsMap()).andReturn(partitionsWithLaggingReplicasMap122).times(2);
         EasyMock.expect(clusterModel.brokenBrokers()).andReturn(new TreeSet<Broker>()).anyTimes();
         EasyMock.expect(clusterModel.brokers()).andReturn(new TreeSet<Broker>(Arrays.asList(replicas).stream()
                         .map(node -> generateBroker(node.id(), 0)).collect(Collectors.toList()))).anyTimes();
