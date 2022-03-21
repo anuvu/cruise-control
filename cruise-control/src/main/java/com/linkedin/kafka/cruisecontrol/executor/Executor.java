@@ -986,6 +986,41 @@ public class Executor {
     }
   }
 
+  /***
+   * Cancel reassignments external to CruiseControl so as to not be blocked. 
+   * Reassignments aborted while CC is still running are handled by CC itself.
+   * This will not affect reassignments started by CC itself as that is handled in {@code KafkaCruiseControl.sanityCheckDryRun()}
+   * Required for cases where CC dies while an execution is in progress 
+   * Eg. node running CC goes down 
+   */
+  public void cancelStaleReassignments() {
+    if (!_stuckPartitionsBeingReassinedSemaphore.tryAcquire()) {
+      throw new IllegalStateException(String.format("Stuck/Stale partitions currently being reassigned"));
+    }
+    Set<TopicPartition> partitionsBeingReassigned;
+    try {
+      partitionsBeingReassigned = ExecutionUtils.partitionsBeingReassigned(_adminClient);
+    } catch (TimeoutException | InterruptedException | ExecutionException e) {
+      throw new IllegalStateException("Unable to retrieve current partition reassignments", e);
+    }
+    if (partitionsBeingReassigned.isEmpty()) {
+      LOG.info("No stale reassignments found");
+      return;
+    }
+    Map<TopicPartition, Optional<NewPartitionReassignment>> newReassignments = new HashMap<>();
+    for (TopicPartition tp : partitionsBeingReassigned) {
+      newReassignments.put(tp, ExecutionUtils.cancelReassignmentValue());
+    }
+    try {
+      _adminClient.alterPartitionReassignments(newReassignments).all().get();
+      LOG.info("Cancelled stale partition assignments {}", partitionsBeingReassigned.toString());
+    } catch (InterruptedException | ExecutionException e) {
+      LOG.error("Error cancelling ongoing partition reassignments {}", e);
+    } finally {
+      _stuckPartitionsBeingReassinedSemaphore.release();
+    }
+  }
+
   /**
    * Check and clear stuck partitionReassignments- Required to handle deadlocked conditions where reassignment is stuck 
    * in a limbo state due to the destination broker(s) being unavailable and one/more of the original brokers to revert to is also down
@@ -993,7 +1028,7 @@ public class Executor {
   public void fixStuckPartitionReassignments() {
     // make sure only one stuckPartitionReassginement call happening at any time
     if (!_stuckPartitionsBeingReassinedSemaphore.tryAcquire()) {
-      throw new IllegalStateException(String.format("Stuck partitions currently being reassigned"));
+      throw new IllegalStateException(String.format("Stuck/Stale partitions currently being reassigned"));
     }
     Map<TopicPartition, Optional<NewPartitionReassignment>> ongoingPartitionReassignmentsToBeChanged = new HashMap<>();
     try {
