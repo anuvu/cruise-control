@@ -274,7 +274,10 @@ public class KafkaCruiseControl {
                                         + "an already ongoing partition reassignment.", e);
       }
       if (!partitionsBeingReassigned.isEmpty()) {
-        if (_config.getBoolean(ExecutorConfig.REMOVE_STUCK_PARTITIONS_REASSIGNMENTS)) {
+        if (_config.getBoolean(ExecutorConfig.DELETE_STALE_PARTITIONS_REASSIGNMENTS)) {
+          LOG.info("Trying to resolve stuck partitions {}", partitionsBeingReassigned);
+          _executor.cancelStaleReassignments();
+        } else if (_config.getBoolean(ExecutorConfig.REMOVE_STUCK_PARTITIONS_REASSIGNMENTS)) {
           LOG.info("Trying to resolve stuck partitions {}", partitionsBeingReassigned);
           _executor.fixStuckPartitionReassignments();
         } else {
