@@ -5,6 +5,7 @@
 package com.linkedin.kafka.cruisecontrol.analyzer.goals;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -35,6 +36,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static com.linkedin.kafka.cruisecontrol.KafkaCruiseControlUtils.closeAdminClientWithTimeout;
 import static com.linkedin.kafka.cruisecontrol.KafkaCruiseControlUtils.createAdminClient;
 import static com.linkedin.kafka.cruisecontrol.KafkaCruiseControlUtils.parseAdminClientConfigs;
 
@@ -48,31 +50,26 @@ import static com.linkedin.kafka.cruisecontrol.KafkaCruiseControlUtils.parseAdmi
 public class LaggingReplicaReassignmentGoal extends AbstractGoal {
 
     private static final Logger LOG = LoggerFactory.getLogger(LaggingReplicaReassignmentGoal.class);
-    private boolean _laggingRecoveryNeeded;
 
-    private List<PartitionInfo> _laggingPartitions;
+    protected static final ConcurrentHashMap<PartitionInfoWrapper, Long> LAGGING_PARTITIONS_MAP = new ConcurrentHashMap<PartitionInfoWrapper, Long>();
+    private static final Object UPDATE_LAGGING_PARTITIONS_MAP_LOCK = new Object();
 
-    protected ConcurrentHashMap<PartitionInfoWrapper, Long> _laggingPartitionsMap;
+    private static volatile boolean laggingRecoveryNeeded = false;
 
-    private ConcurrentHashMap<PartitionInfoWrapper, Long> _newLaggingPartitionsMap;
-
-    private long _maxReplicaLagMs;
-
-    private AdminClient _adminClient;
+    private static List<PartitionInfo> laggingPartitionsList = Collections.synchronizedList(new ArrayList<PartitionInfo>());
 
     private KafkaCruiseControlConfig _parsedConfig;
 
+    private long _maxReplicaLagMs;
+
     @Override
     public void configure(Map<String, ?> configs) {
+        LOG.info("Configuring LaggingReplicaReassignmentGoal");
         _parsedConfig = new KafkaCruiseControlConfig(configs, false);
-        _adminClient = createAdminClient(parseAdminClientConfigs(_parsedConfig));
         _balancingConstraint = new BalancingConstraint(_parsedConfig);
         _numWindows = _parsedConfig.getInt(MonitorConfig.NUM_PARTITION_METRICS_WINDOWS_CONFIG);
         _minMonitoredPartitionPercentage = _parsedConfig.getDouble(MonitorConfig.MIN_VALID_PARTITION_RATIO_CONFIG);
-        _laggingPartitionsMap = new ConcurrentHashMap<PartitionInfoWrapper, Long>();
         _maxReplicaLagMs = (long) configs.get(AnalyzerConfig.MAX_LAGGING_REPLICA_REASSIGN_MS);
-        _laggingPartitions = new ArrayList<PartitionInfo>();
-        _laggingRecoveryNeeded = false;
     }
 
     @Override
@@ -146,7 +143,7 @@ public class LaggingReplicaReassignmentGoal extends AbstractGoal {
         
         LOG.info("updateGoalState");
         checkIfReplicasLagging(clusterModel);
-        if (!_laggingRecoveryNeeded) {
+        if (!laggingRecoveryNeeded) {
             finish();
         }
 
@@ -154,55 +151,63 @@ public class LaggingReplicaReassignmentGoal extends AbstractGoal {
 
     void checkIfReplicasLagging(ClusterModel clusterModel) throws OptimizationFailureException {
         long currentTimeMillis = System.currentTimeMillis();
-        _newLaggingPartitionsMap = new ConcurrentHashMap<PartitionInfoWrapper, Long>();
+        ConcurrentHashMap<PartitionInfoWrapper, Long> newLaggingPartitionsMap = new ConcurrentHashMap<PartitionInfoWrapper, Long>();
         LOG.info("Checking for lagging replicas");
-        if (_laggingPartitionsMap == null) {
-            _laggingPartitionsMap = new ConcurrentHashMap<PartitionInfoWrapper, Long>();
-        }
         //List<PartitionInfo> laggingPartitionInfos = clusterModel.getPartitionsWithLaggingReplicas();
-        //_laggingPartitionsMap.entrySet().removeIf(e -> !laggingPartitionInfos.contains(e.getKey()._pi));
+        //LAGGING_PARTITIONS_MAP.entrySet().removeIf(e -> !laggingPartitionInfos.contains(e.getKey()._pi));
         for (PartitionInfo partition: clusterModel.getPartitionsWithLaggingReplicas()) {
             LOG.info(partition.toString());
             PartitionInfoWrapper piw = new PartitionInfoWrapper(partition);
-            long lastSeenTime = _laggingPartitionsMap.getOrDefault(piw, currentTimeMillis);
+            long lastSeenTime = LAGGING_PARTITIONS_MAP.getOrDefault(piw, currentTimeMillis);
             if (currentTimeMillis - lastSeenTime >= _maxReplicaLagMs) {
                 LOG.info("Partition {} has been lagging for past {} minutes", partition.toString(), 
                             (currentTimeMillis - lastSeenTime) / (60 * 1000));
-                _laggingRecoveryNeeded = true;
-                _laggingPartitions.add(partition);
+                laggingRecoveryNeeded = true;
+                laggingPartitionsList.add(partition);
             }
-            _newLaggingPartitionsMap.put(piw, lastSeenTime);
+            newLaggingPartitionsMap.put(piw, lastSeenTime);
         }
-        _laggingPartitionsMap = _newLaggingPartitionsMap;
-        LOG.info("Lagging partitions map: {}  on thread after {}", _laggingPartitionsMap.toString(), Thread.currentThread().getName());
+        synchronized (UPDATE_LAGGING_PARTITIONS_MAP_LOCK) {
+            LAGGING_PARTITIONS_MAP.clear();
+            LAGGING_PARTITIONS_MAP.putAll(newLaggingPartitionsMap);
+        }
+        LOG.info("Lagging partitions map: {}  on thread after {}", LAGGING_PARTITIONS_MAP.toString(), Thread.currentThread().getName());
     }
 
     List<PartitionInfo> getLaggingPartitions() {
-        return _laggingPartitions;
+        return laggingPartitionsList;
     }
 
     @Override
     protected void rebalanceForBroker(Broker broker, ClusterModel clusterModel, Set<Goal> optimizedGoals,
             OptimizationOptions optimizationOptions) throws OptimizationFailureException {
         
-        LOG.info("Current lagging partitions: {} ", _laggingPartitions.toString());
-        if (_laggingRecoveryNeeded) {
-            Map<TopicPartition, Optional<NewPartitionReassignment>> reassignments = new HashMap<>(); 
-            // gather all the lagging partitions into a reassignments map
-            for (PartitionInfo laggingPartition: _laggingPartitions) {
-                List<Node> laggingReplicas = new LinkedList<Node>(Arrays.asList(laggingPartition.replicas()));
-                reassignments.put(new TopicPartition(laggingPartition.topic(), laggingPartition.partition()), 
-                Optional.of(new NewPartitionReassignment(laggingReplicas.stream().map(node -> node.id()).collect(Collectors.toList()))));
-                _laggingPartitionsMap.remove(new PartitionInfoWrapper(laggingPartition));
-            }
-            // use admin client to move them to same brokers
-            try {
-                _adminClient.alterPartitionReassignments(reassignments).all().get();
-                reassignments.entrySet().stream().forEach(e -> LOG.info("Moved partition {}: {}", e.getKey(), e.getValue().get().targetReplicas()));
-                _laggingPartitions.clear();
-                _laggingRecoveryNeeded = false;
-            } catch (InterruptedException | ExecutionException e) {
-                LOG.error("Unable to move replicas onto same brokers");
+        LOG.info("Current lagging partitions: {} ", laggingPartitionsList.toString());
+        if (laggingRecoveryNeeded) {
+            synchronized (UPDATE_LAGGING_PARTITIONS_MAP_LOCK) {
+                Map<TopicPartition, Optional<NewPartitionReassignment>> reassignments = new HashMap<>(); 
+                // gather all the lagging partitions into a reassignments map
+                for (PartitionInfo laggingPartition: laggingPartitionsList) {
+                    List<Node> laggingReplicas = new LinkedList<Node>(Arrays.asList(laggingPartition.replicas()));
+                    reassignments.put(new TopicPartition(laggingPartition.topic(), laggingPartition.partition()), 
+                    Optional.of(new NewPartitionReassignment(laggingReplicas.stream().map(node -> node.id()).collect(Collectors.toList()))));
+                    //LAGGING_PARTITIONS_MAP.remove(new PartitionInfoWrapper(laggingPartition));
+                }
+                // use admin client to move them to same brokers
+                LOG.info("Creating adminClient for partition reassignment");
+                AdminClient adminClient = createAdminClient(parseAdminClientConfigs(_parsedConfig));
+                try {
+                    adminClient.alterPartitionReassignments(reassignments).all().get();
+                    reassignments.entrySet().stream().
+                                            forEach(e -> LOG.info("Moved partition {}: {}", e.getKey(), e.getValue().get().targetReplicas()));
+                    laggingPartitionsList.clear();
+                    laggingRecoveryNeeded = false;
+                    LAGGING_PARTITIONS_MAP.clear();
+                } catch (InterruptedException | ExecutionException e) {
+                    LOG.error("Unable to move replicas onto same brokers");
+                }
+                LOG.info("Closing adminClient");
+                closeAdminClientWithTimeout(adminClient);
             }
         }
         
@@ -226,7 +231,11 @@ public class LaggingReplicaReassignmentGoal extends AbstractGoal {
             PartitionInfoWrapper partitionInfoWrapperObj = (PartitionInfoWrapper) o;
             PartitionInfo p2 = partitionInfoWrapperObj._pi;
             if (_pi.topic().equals(p2.topic()) && _pi.partition() == p2.partition() 
-                && _pi.leader().id() == p2.leader().id() && _pi.inSyncReplicas().length == p2.inSyncReplicas().length) {
+                && (
+                    (_pi.leader() == null && p2.leader() == null) 
+                    || (_pi.leader() != null && p2.leader() != null && _pi.leader().id() == p2.leader().id())
+                    )
+                && _pi.inSyncReplicas().length == p2.inSyncReplicas().length) {
                 Set<Integer> p2ISRSet = Arrays.stream(p2.inSyncReplicas()).map(isr -> isr.id()).collect(Collectors.toSet());
                 if (Arrays.stream(_pi.inSyncReplicas()).allMatch(isr -> p2ISRSet.contains(isr.id()))) {
                     return true;
@@ -241,7 +250,7 @@ public class LaggingReplicaReassignmentGoal extends AbstractGoal {
             int result = 1;
             result = prime * result + ((_pi.topic() == null) ? 0 : _pi.topic().hashCode());
             result = prime * result + _pi.partition();
-            result = prime * result + _pi.leader().id();
+            result = prime * result + ((_pi.leader() == null) ? 0 : _pi.leader().id());
             for (Node n: _pi.inSyncReplicas()) {
                 result = prime * result + n.id();
             }

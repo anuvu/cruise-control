@@ -295,6 +295,9 @@ public class KafkaCruiseControl {
             LOG.info("External agent is reassigning partitions. "
                      + "The request to stop it is submitted successfully: {}", partitionsBeingReassigned);
           }
+        } else if (_config.getBoolean(ExecutorConfig.DELETE_STALE_PARTITIONS_REASSIGNMENTS)) {
+          LOG.info("Trying to resolve stuck partitions {}", partitionsBeingReassigned);
+          _executor.cancelStaleReassignments();
         } else if (_config.getBoolean(ExecutorConfig.REMOVE_STUCK_PARTITIONS_REASSIGNMENTS)) {
           LOG.info("Trying to resolve stuck partitions {}", partitionsBeingReassigned);
           _executor.fixStuckPartitionReassignments();
