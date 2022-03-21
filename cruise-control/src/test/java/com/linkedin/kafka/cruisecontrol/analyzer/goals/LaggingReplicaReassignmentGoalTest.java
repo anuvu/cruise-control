@@ -101,6 +101,7 @@ public class LaggingReplicaReassignmentGoalTest {
         }).anyTimes();
         clusterModel.clearSortedReplicas();
         clusterModel.clearSortedReplicas();
+        adminClient.close();
         EasyMock.expect(clusterModel.getPartitionsWithLaggingReplicas()).andReturn(new ArrayList<PartitionInfo>());
         EasyMock.expect(clusterModel.getPartitionsWithLaggingReplicas()).andReturn(partitionsWithLaggingReplicas1);
         EasyMock.expect(clusterModel.getPartitionsWithLaggingReplicas()).andReturn(partitionsWithLaggingReplicas12);
@@ -121,9 +122,9 @@ public class LaggingReplicaReassignmentGoalTest {
         // optimize again after sleep
         goal.optimize(clusterModel, optimizedGoals, new OptimizationOptions(new HashSet<String>(), new HashSet<Integer>(), new HashSet<Integer>()));
         // should have been moved as 1st seen before sleep
-        assertFalse(goal._laggingPartitionsMap.containsKey(new PartitionInfoWrapper(partitionInfo1)));
+        assertFalse(goal.LAGGING_PARTITIONS_MAP.containsKey(new PartitionInfoWrapper(partitionInfo1)));
         // still hasnt reached maxLagTimeMS threshold
-        assertTrue(goal._laggingPartitionsMap.containsKey(new PartitionInfoWrapper(partitionInfo2Copy)));
+        assertTrue(goal.LAGGING_PARTITIONS_MAP.containsKey(new PartitionInfoWrapper(partitionInfo2Copy)));
         EasyMock.verify(clusterModel);
     }
 
@@ -193,8 +194,8 @@ public class LaggingReplicaReassignmentGoalTest {
         }
         // optimize again after sleep
         goal.optimize(clusterModel, optimizedGoals, new OptimizationOptions(new HashSet<String>(), new HashSet<Integer>(), new HashSet<Integer>()));
-        assertFalse(goal._laggingPartitionsMap.containsKey(new PartitionInfoWrapper(partitionInfo1)));
-        assertFalse(goal._laggingPartitionsMap.containsKey(new PartitionInfoWrapper(partitionInfo2)));
+        assertFalse(goal.LAGGING_PARTITIONS_MAP.containsKey(new PartitionInfoWrapper(partitionInfo1)));
+        assertFalse(goal.LAGGING_PARTITIONS_MAP.containsKey(new PartitionInfoWrapper(partitionInfo2)));
         try {
             Thread.sleep(1000);
         } catch (InterruptedException e) {
@@ -202,8 +203,8 @@ public class LaggingReplicaReassignmentGoalTest {
         }
         // optimize again after sleep
         goal.optimize(clusterModel, optimizedGoals, new OptimizationOptions(new HashSet<String>(), new HashSet<Integer>(), new HashSet<Integer>()));
-        assertTrue(goal._laggingPartitionsMap.containsKey(new PartitionInfoWrapper(partitionInfo1)));
-        assertTrue(goal._laggingPartitionsMap.containsKey(new PartitionInfoWrapper(partitionInfo2Copy)));
+        assertTrue(goal.LAGGING_PARTITIONS_MAP.containsKey(new PartitionInfoWrapper(partitionInfo1)));
+        assertTrue(goal.LAGGING_PARTITIONS_MAP.containsKey(new PartitionInfoWrapper(partitionInfo2Copy)));
         EasyMock.verify(clusterModel);
     }
 }
