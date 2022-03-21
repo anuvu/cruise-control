@@ -552,6 +552,14 @@ public final class ExecutorConfig {
       + " finish the reassignemnt or revert back to original (Eg. dest & origin brokers both went down)";
 
   /**
+   * <code>delete.stale.partition.reassignments</code>
+   */
+  public static final String DELETE_STALE_PARTITIONS_REASSIGNMENTS = "delete.stale.partition.reassignments";
+  public static final boolean DEFAULT_DELETE_STALE_PARTITIONS_REASSIGNMENTS = false;
+  public static final String DELETE_STALE_PARTITIONS_REASSIGNMENTS_DOC = "Delete Stale partition reassignments- eg. from "
+      + " an older instance of CruiseControl which died due t various reasons(node down/etc)";
+
+  /**
    * Define configs for Executor.
    *
    * @param configDef Config definition.
@@ -892,6 +900,11 @@ public final class ExecutorConfig {
                             ConfigDef.Type.BOOLEAN,
                             DEFAULT_REMOVE_STUCK_PARTITIONS_REASSIGNMENTS,
                             ConfigDef.Importance.HIGH,
-                            REMOVE_STUCK_PARTITIONS_REASSIGNMENTS_DOC);
+                            REMOVE_STUCK_PARTITIONS_REASSIGNMENTS_DOC)
+                    .define(DELETE_STALE_PARTITIONS_REASSIGNMENTS,
+                            ConfigDef.Type.BOOLEAN,
+                            DEFAULT_DELETE_STALE_PARTITIONS_REASSIGNMENTS,
+                            ConfigDef.Importance.HIGH,
+                            DELETE_STALE_PARTITIONS_REASSIGNMENTS_DOC);
   }
 }

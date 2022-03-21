@@ -289,7 +289,13 @@ public class KafkaCruiseControl {
                                         + "an already ongoing partition reassignment.", e);
       }
       if (!partitionsBeingReassigned.isEmpty()) {
-        if (_config.getBoolean(ExecutorConfig.AUTO_STOP_EXTERNAL_AGENT_CONFIG)) {
+        if (_config.getBoolean(ExecutorConfig.DELETE_STALE_PARTITIONS_REASSIGNMENTS)) {
+          LOG.info("Trying to resolve stuck partitions {}", partitionsBeingReassigned);
+          _executor.cancelStaleReassignments();
+        } else if (_config.getBoolean(ExecutorConfig.REMOVE_STUCK_PARTITIONS_REASSIGNMENTS)) {
+          LOG.info("Trying to resolve stuck partitions {}", partitionsBeingReassigned);
+          _executor.fixStuckPartitionReassignments();
+        } else if (_config.getBoolean(ExecutorConfig.AUTO_STOP_EXTERNAL_AGENT_CONFIG)) {
           // Stop the external agent reassignment.
           if (_executor.maybeStopExternalAgent()) {
             LOG.info("External agent is reassigning partitions. "
@@ -298,13 +304,6 @@ public class KafkaCruiseControl {
         } else {
           throw new IllegalStateException(String.format("Cannot execute new proposals while there are ongoing partition reassignments "
                                                         + "initiated by external agent: %s", partitionsBeingReassigned));
-        }
-        if (_config.getBoolean(ExecutorConfig.REMOVE_STUCK_PARTITIONS_REASSIGNMENTS)) {
-          LOG.info("Trying to resolve stuck partitions {}", partitionsBeingReassigned);
-          _executor.fixStuckPartitionReassignments();
-        } else {
-          throw new IllegalStateException(String.format("Cannot execute new proposals while there are ongoing partition reassignments "
-                                                      + "initiated by external agent: %s", partitionsBeingReassigned));
         }
       } else if (_executor.hasOngoingLeaderElection()) {
         throw new IllegalStateException("Cannot execute new proposals while there are ongoing leadership reassignments initiated by "
