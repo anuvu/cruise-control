@@ -61,6 +61,8 @@ public class LaggingReplicaReassignmentGoalTest {
         AdminClient adminClient = EasyMock.createMock(AdminClient.class);
         PowerMock.mockStatic(KafkaCruiseControlUtils.class);
         EasyMock.expect(KafkaCruiseControlUtils.createAdminClient(EasyMock.anyObject())).andReturn(adminClient);
+        KafkaCruiseControlUtils.closeAdminClientWithTimeout(EasyMock.anyObject());
+        EasyMock.expectLastCall();
         EasyMock.expect(KafkaCruiseControlUtils.parseAdminClientConfigs(EasyMock.anyObject())).andReturn(configs);
         PowerMock.replay(KafkaCruiseControlUtils.class);
         
