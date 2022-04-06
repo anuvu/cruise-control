@@ -297,7 +297,7 @@ public class KafkaCruiseControl {
           }
         } else if (_config.getBoolean(ExecutorConfig.DELETE_STALE_PARTITIONS_REASSIGNMENTS)) {
           LOG.info("Trying to resolve stuck partitions {}", partitionsBeingReassigned);
-          _executor.cancelStaleReassignments();
+          _executor.cancelStaleReassignments(partitionsBeingReassigned);
         } else if (_config.getBoolean(ExecutorConfig.REMOVE_STUCK_PARTITIONS_REASSIGNMENTS)) {
           LOG.info("Trying to resolve stuck partitions {}", partitionsBeingReassigned);
           _executor.fixStuckPartitionReassignments();

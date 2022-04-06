@@ -260,6 +260,14 @@ public final class ExecutorConfig {
       + "A leader movement will be marked as failed if it takes longer than this time to finish.";
 
   /**
+   * <code>partition.reassignment.timeout.ms</code>
+   */
+  public static final String PARTITION_REASSIGNMENT_TIMEOUT_MS_CONFIG = "partition.reassignment.timeout.ms";
+  public static final long DEFAULT_PARTITION_REASSIGNMENT_TIMEOUT_MS_CONFIG = TimeUnit.MINUTES.toMillis(60);
+  public static final String PARTITION_REASSIGNMENT_TIMEOUT_MS_CONFIG_DOC = "The maximum time to wait for a partition reassignment to finish. "
+      + "The reassignment will be marked as failed if it takes longer than this to finish.";
+
+  /**
    * <code>task.execution.alerting.threshold.ms</code>
    */
   public static final String TASK_EXECUTION_ALERTING_THRESHOLD_MS_CONFIG = "task.execution.alerting.threshold.ms";
@@ -791,6 +799,11 @@ public final class ExecutorConfig {
                             DEFAULT_LEADER_MOVEMENT_TIMEOUT_MS,
                             ConfigDef.Importance.LOW,
                             LEADER_MOVEMENT_TIMEOUT_MS_DOC)
+                    .define(PARTITION_REASSIGNMENT_TIMEOUT_MS_CONFIG,
+                            ConfigDef.Type.LONG,
+                            DEFAULT_PARTITION_REASSIGNMENT_TIMEOUT_MS_CONFIG,
+                            ConfigDef.Importance.LOW,
+                            PARTITION_REASSIGNMENT_TIMEOUT_MS_CONFIG_DOC)
                     .define(TASK_EXECUTION_ALERTING_THRESHOLD_MS_CONFIG,
                             ConfigDef.Type.LONG,
                             DEFAULT_TASK_EXECUTION_ALERTING_THRESHOLD_MS,
