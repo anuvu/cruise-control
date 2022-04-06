@@ -99,6 +99,7 @@ public class Executor {
   private final ExecutorService _proposalExecutor;
   private final AdminClient _adminClient;
   private final double _leaderMovementTimeoutMs;
+  private final double _partitionReassignmentTimeoutMs;
 
   private static final int NO_STOP_EXECUTION = 0;
   private static final int STOP_EXECUTION = 1;
@@ -195,6 +196,7 @@ public class Executor {
     _defaultExecutionProgressCheckIntervalMs = config.getLong(ExecutorConfig.EXECUTION_PROGRESS_CHECK_INTERVAL_MS_CONFIG);
     _executionProgressCheckIntervalMs = _defaultExecutionProgressCheckIntervalMs;
     _leaderMovementTimeoutMs = config.getLong(ExecutorConfig.LEADER_MOVEMENT_TIMEOUT_MS_CONFIG);
+    _partitionReassignmentTimeoutMs = config.getLong(ExecutorConfig.PARTITION_REASSIGNMENT_TIMEOUT_MS_CONFIG);
     _requestedExecutionProgressCheckIntervalMs = null;
     _proposalExecutor =
         Executors.newSingleThreadExecutor(new KafkaCruiseControlThreadFactory("ProposalExecutor", false, LOG));
@@ -968,8 +970,6 @@ public class Executor {
     }
     // Note that in case there is an ongoing partition reassignment, we do not unpause metric sampling.
     if (hasOngoingPartitionReassignments) {
-      // check for stuck partition movements
-      fixStuckPartitionReassignments();
       throw new OngoingExecutionException("There are ongoing inter-broker partition movements.");
     } else {
       boolean hasOngoingIntraBrokerReplicaMovement;
@@ -994,19 +994,9 @@ public class Executor {
    * Required for cases where CC dies while an execution is in progress 
    * Eg. node running CC goes down 
    */
-  public void cancelStaleReassignments() {
+  public void cancelStaleReassignments(Set<TopicPartition> partitionsBeingReassigned) {
     if (!_stuckPartitionsBeingReassinedSemaphore.tryAcquire()) {
       throw new IllegalStateException(String.format("Stuck/Stale partitions currently being reassigned"));
-    }
-    Set<TopicPartition> partitionsBeingReassigned;
-    try {
-      partitionsBeingReassigned = ExecutionUtils.partitionsBeingReassigned(_adminClient);
-    } catch (TimeoutException | InterruptedException | ExecutionException e) {
-      throw new IllegalStateException("Unable to retrieve current partition reassignments", e);
-    }
-    if (partitionsBeingReassigned.isEmpty()) {
-      LOG.info("No stale reassignments found");
-      return;
     }
     Map<TopicPartition, Optional<NewPartitionReassignment>> newReassignments = new HashMap<>();
     for (TopicPartition tp : partitionsBeingReassigned) {
@@ -1014,7 +1004,7 @@ public class Executor {
     }
     try {
       _adminClient.alterPartitionReassignments(newReassignments).all().get();
-      LOG.info("Cancelled stale partition assignments {}", partitionsBeingReassigned.toString());
+      LOG.info("Cancelled stale partition reassignments {}", partitionsBeingReassigned.toString());
     } catch (InterruptedException | ExecutionException e) {
       LOG.error("Error cancelling ongoing partition reassignments {}", e);
     } finally {
@@ -2055,6 +2045,11 @@ public class Executor {
             break;
 
           case INTER_BROKER_REPLICA_ACTION:
+            if (_time.milliseconds() > task.startTimeMs() + _partitionReassignmentTimeoutMs) {
+              _executionTaskManager.markTaskDead(task);
+              LOG.warn("Killing execution for task {} as it has exceeded maximum partition movement timeout", task);
+              return true;
+            }
             for (ReplicaPlacementInfo broker : task.proposal().newReplicas()) {
               if (cluster.nodeById(broker.brokerId()) == null
                   || deadInterBrokerReassignments.contains(task.proposal().topicPartition())) {
