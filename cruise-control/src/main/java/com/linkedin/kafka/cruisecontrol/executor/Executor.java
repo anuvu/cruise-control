@@ -1058,15 +1058,17 @@ public class Executor {
    */
   private void sanityCheckOngoingMovement() throws OngoingExecutionException {
     boolean hasOngoingPartitionReassignments;
+    Map<TopicPartition, PartitionReassignment> ongoingPartitionReassignments;
     try {
-      hasOngoingPartitionReassignments = hasOngoingPartitionReassignments();
+       ongoingPartitionReassignments = ExecutionUtils.ongoingPartitionReassignments(_adminClient);
+       hasOngoingPartitionReassignments = !ongoingPartitionReassignments.keySet().isEmpty();
     } catch (TimeoutException | InterruptedException | ExecutionException e) {
       // This may indicate transient (e.g. network) issues.
       throw new IllegalStateException("Failed to retrieve if there are already ongoing partition reassignments.", e);
     }
     // Note that in case there is an ongoing partition reassignment, we do not unpause metric sampling.
     if (hasOngoingPartitionReassignments) {
-      throw new OngoingExecutionException("There are ongoing inter-broker partition movements.");
+      throw new OngoingExecutionException("There are ongoing inter-broker partition movements: " + ongoingPartitionReassignments);
     } else {
       boolean hasOngoingIntraBrokerReplicaMovement;
       try {
