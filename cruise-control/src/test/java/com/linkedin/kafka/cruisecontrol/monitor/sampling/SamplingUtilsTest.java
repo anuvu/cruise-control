@@ -34,6 +34,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.TopicConfig;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.Test;
@@ -44,8 +45,6 @@ import static com.linkedin.kafka.cruisecontrol.KafkaCruiseControlUtils.maybeIncr
 import static com.linkedin.kafka.cruisecontrol.KafkaCruiseControlUtils.maybeUpdateReplicationFactor;
 import static com.linkedin.kafka.cruisecontrol.KafkaCruiseControlUtils.maybeUpdateTopicConfig;
 import static com.linkedin.kafka.cruisecontrol.KafkaCruiseControlUtils.wrapTopic;
-import static kafka.log.LogConfig.CleanupPolicyProp;
-import static kafka.log.LogConfig.RetentionMsProp;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -79,7 +78,7 @@ public class SamplingUtilsTest {
     Config topicConfig = EasyMock.createMock(Config.class);
     AlterConfigsResult alterConfigsResult = EasyMock.createMock(AlterConfigsResult.class);
     Set<AlterConfigOp> alterConfigOps = Collections.singleton(new AlterConfigOp(
-        new ConfigEntry(RetentionMsProp(), Long.toString(MOCK_DESIRED_RETENTION_MS)), AlterConfigOp.OpType.SET));
+        new ConfigEntry(TopicConfig.RETENTION_MS_CONFIG, Long.toString(MOCK_DESIRED_RETENTION_MS)), AlterConfigOp.OpType.SET));
     Map<ConfigResource, KafkaFuture<Config>> describeConfigsValues = Collections.singletonMap(MOCK_TOPIC_RESOURCE,
                                                                                               describedConfigsFuture);
     Map<ConfigResource, KafkaFuture<Void>> alterConfigsValues = Collections.singletonMap(MOCK_TOPIC_RESOURCE,
@@ -89,9 +88,9 @@ public class SamplingUtilsTest {
     EasyMock.expect(adminClient.describeConfigs(EasyMock.eq(Collections.singleton(MOCK_TOPIC_RESOURCE)))).andReturn(describeConfigsResult);
     EasyMock.expect(describeConfigsResult.values()).andReturn(describeConfigsValues);
     EasyMock.expect(describedConfigsFuture.get(CLIENT_REQUEST_TIMEOUT_MS, TimeUnit.MILLISECONDS)).andReturn(topicConfig);
-    EasyMock.expect(topicConfig.get(EasyMock.eq(CleanupPolicyProp()))).andReturn(new ConfigEntry(CleanupPolicyProp(),
+    EasyMock.expect(topicConfig.get(EasyMock.eq(TopicConfig.CLEANUP_POLICY_CONFIG))).andReturn(new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG,
                                                                                                  DEFAULT_CLEANUP_POLICY));
-    EasyMock.expect(topicConfig.get(EasyMock.eq(RetentionMsProp()))).andReturn(new ConfigEntry(RetentionMsProp(),
+    EasyMock.expect(topicConfig.get(EasyMock.eq(TopicConfig.RETENTION_MS_CONFIG))).andReturn(new ConfigEntry(TopicConfig.RETENTION_MS_CONFIG,
                                                                                                MOCK_CURRENT_RETENTION_MS));
     EasyMock.expect(adminClient.incrementalAlterConfigs(EasyMock.eq(Collections.singletonMap(MOCK_TOPIC_RESOURCE,
                                                                                              alterConfigOps))))
