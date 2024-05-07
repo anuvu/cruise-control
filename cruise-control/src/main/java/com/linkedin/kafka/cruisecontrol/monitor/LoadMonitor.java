@@ -511,7 +511,7 @@ public class LoadMonitor {
     // Create an empty cluster model first.
     long currentLoadGeneration = partitionMetricSampleAggregationResult.generation();
     ModelGeneration modelGeneration = new ModelGeneration(clusterAndGeneration.generation(), currentLoadGeneration);
-    ClusterModel clusterModel = new ClusterModel(modelGeneration, partitionMetricSampleAggregationResult.validEntityRatioOfCompleteness());
+    ClusterModel clusterModel = new ClusterModel(modelGeneration, partitionMetricSampleAggregationResult.validEntityRatioOfCompleteness(), cluster);
     
     // ClusterModel clusterModel = new ClusterModel(modelGeneration, partitionMetricSampleAggregationResult.completeness().validEntityRatio(), 
     // cluster);
@@ -555,7 +555,7 @@ public class LoadMonitor {
 
     // Create an empty cluster model first.
     ModelGeneration modelGeneration = new ModelGeneration(clusterAndGeneration.generation(), -1L);
-    ClusterModel clusterModel = new ClusterModel(modelGeneration, 0.0);
+    ClusterModel clusterModel = new ClusterModel(modelGeneration, 0.0, cluster);
 
     populateClusterCapacity(false, false, clusterModel, cluster);
     // Set the state of bad brokers in clusterModel based on the Kafka cluster state.
