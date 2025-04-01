@@ -8,10 +8,10 @@ import com.linkedin.kafka.cruisecontrol.KafkaCruiseControlUtils;
 import com.linkedin.kafka.cruisecontrol.config.constants.WebServerConfig;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.server.config.ZkConfigs;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import kafka.server.KafkaConfig;
 import uk.org.webcompere.systemstubs.rules.EnvironmentVariablesRule;
 import java.io.IOException;
 import java.util.Arrays;
@@ -49,7 +49,7 @@ public class EnvConfigProviderTest {
     // Test for bootstrap.servers and zk.connect
     List<String> actualServersList = configs.getList(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG);
     assertEquals(actualServersList.toString(), BOOTSTRAP_SERVERS_LIST.toString());
-    String zookeeperList = configs.getString(KafkaConfig.ZkConnectProp());
+    String zookeeperList = configs.getString(ZkConfigs.ZK_CONNECT_CONFIG);
     assertEquals(zookeeperList, ZOOKEEPER_CONNECT);
   }
 
